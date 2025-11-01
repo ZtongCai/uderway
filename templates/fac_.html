@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>海上的日子 — 工业港口风</title>
+<style>
+  /* ====== Theme tokens (easy to tweak) ====== */
+  :root{
+    --bg:#f3f5f7;            /* overall page paper-ish background (keeps warm neutral) */
+    --panel-bg: #ffffffcc;   /* right panel background */
+    --ink: #1f2b33;          /* primary text (near-black but softer) */
+    --steel: #5f6b74;        /* steel / grey */
+    --navy: #1b3b52;         /* deep navy accent */
+    --safety: #f1a71b;       /* safety/yellow accent */
+    --accent: #ff6b35;       /* safety orange (sparingly) */
+    --muted: #9aa7b2;
+    --font-sans: "InterVar", "Helvetica Neue", Arial, sans-serif;
+    --mono: "SFMono-Regular", "Consolas", "monospace";
+    --map-width: 800px;
+    --map-height: 600px;
+  }
+
+  /* ====== base ====== */
+  html,body { height:100%; }
+  body{
+    margin:20px; background:var(--bg); color:var(--ink);
+    font-family:var(--font-sans); -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale; font-size:15.5px; line-height:1.7;
+  }
+  h1{ margin:4px 0 10px; font-weight:600; letter-spacing:0.2px; }
+  .hint{ color:var(--muted); font-size:13px; margin-bottom:12px; }
+
+  /* ====== layout ====== */
+  .container{ display:flex; gap:20px; align-items:flex-start; max-width:1240px; }
+  .map {
+    position:relative; width:var(--map-width); height:var(--map-height);
+    border-radius:8px; overflow:hidden; background-color:#e9eef2; box-shadow: 0 10px 30px rgba(20,30,40,0.06);
+    background-image: url('placeholder_map_800x600.png'); background-size:cover; background-position:center;
+    border: 1px solid rgba(31,43,51,0.04);
+  }
+
+  /* subtle metallic overlay texture */
+  .map::after{
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));
+    mix-blend-mode:overlay;
+  }
+
+  /* ====== svg routes (industrial style) ====== */
+  svg{ position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; }
+  .route {
+    stroke: var(--steel);
+    stroke-width:2.2;
+    fill:none;
+    stroke-linecap:round;
+    stroke-dasharray:6 8;
+    opacity:0.95;
+    pointer-events:auto;
+    transition:all .22s ease;
+    cursor:pointer;
+  }
+  /* animated dash (subtle) */
+  @keyframes dash { to { stroke-dashoffset: -1200; } }
+  .route { animation: dash 10s linear infinite; }
+
+  /* hover: steel glow + safety accent */
+  .route:hover { stroke: var(--navy); filter: drop-shadow(0 0 8px rgba(27,59,82,0.12)); stroke-width:2.8; }
+  .route-label {
+    position:absolute; left:16px; top:12px; color:var(--ink);
+    background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.85));
+    padding:8px 10px; border-radius:8px; font-size:13px; border:1px solid rgba(31,43,51,0.04);
+  }
+
+  /* ship marker rendered like an industrial buoy/marker */
+  .marker {
+    fill: var(--accent);
+    stroke: var(--steel);
+    stroke-width:0.8;
+    r:6;
+    pointer-events:none;
+    filter: drop-shadow(0 3px 6px rgba(31,43,51,0.08));
+  }
+
+  /* small container-crane silhouettes and dock lights (CSS controlled) */
+  .crane {
+    position:absolute; width:96px; height:96px; right:18px; top:18px; opacity:0.9;
+    background-image: url('crane_silhouette.svg'); background-size:contain; background-repeat:no-repeat;
+    transform-origin:center; transform: translateY(0);
+    filter: drop-shadow(0 6px 18px rgba(31,43,51,0.06));
+    pointer-events:none;
+  }
+  /* pulsing dock light near X mark */
+  .xmark {
+    position:absolute; transform:translate(-50%,-50%); font-size:20px; color:var(--safety);
+    text-shadow: 0 0 18px rgba(241,167,27,0.25);
+  }
+  @keyframes dockPulse { 0%{ transform:translate(-50%,-50%) scale(1); opacity:1 } 50%{ transform:translate(-50%,-50%) scale(1.12); opacity:0.75 } 100%{ transform:translate(-50%,-50%) scale(1); opacity:1 } }
+  .xmark { animation: dockPulse 2.8s ease-in-out infinite; }
+
+  /* compass replaced by subtle port clock (rotates slowly) */
+  .port-clock {
+    position:absolute; right:12px; bottom:12px; width:76px; height:76px; border-radius:10px; display:flex;
+    align-items:center; justify-content:center; font-weight:600; background: linear-gradient(180deg,#ffffffcc,#f0f2f4cc);
+    color:var(--navy); border:1px solid rgba(31,43,51,0.04); transform-origin:center; animation: rotateClock 60s linear infinite;
+    box-shadow: 0 6px 18px rgba(31,43,51,0.06);
+  }
+  @keyframes rotateClock { from{ transform:rotate(0deg);} to{ transform:rotate(360deg);} }
+
+  /* ====== right panel ====== */
+  .panel { width:360px; padding:18px; border-radius:8px; background:var(--panel-bg); box-shadow: 0 8px 20px rgba(20,30,40,0.05); border:1px solid rgba(31,43,51,0.03); }
+  .controls{ display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+  select{ padding:7px 8px; border-radius:6px; border:1px solid rgba(31,43,51,0.06); background:white; font-family:var(--font-sans); color:var(--ink); }
+  .btn{ margin-left:auto; padding:8px 12px; border-radius:8px; border:none; background:linear-gradient(90deg,var(--navy),var(--steel)); color:white; cursor:pointer; box-shadow: 0 8px 18px rgba(27,59,82,0.08); }
+
+  .log { min-height:170px; white-space:pre-wrap; padding:12px; border-radius:8px; background: linear-gradient(180deg, rgba(255,255,255,0.0), rgba(255,255,255,0.03)); font-family:var(--mono); color:var(--ink); font-size:15.5px; line-height:1.8; }
+
+  .prompt { margin-top:12px; font-size:13px; color:var(--muted); background:rgba(250,250,250,0.6); padding:10px; border-radius:8px; font-family:var(--mono); }
+
+  /* hint & small screens */
+  @media (max-width:980px){
+    .container{ flex-direction:column; align-items:center; }
+    .panel{ width:92%; }
+    .map{ transform:scale(0.94); transform-origin:center; }
+  }
+</style>
+</head>
+<body>
+  <h1>海上的日子 — 工业港口风</h1>
+  <div class="hint">现代港口与工业意象：钢铁、码头、集装箱和灯光（依旧是虚构地图，无真实经纬或港口名）</div>
+
+  <div class="container">
+    <div class="map" id="map" role="img" aria-label="工业风虚构航海图">
+      <!-- optional crane silhouette (put crane_silhouette.svg in same dir or remove) -->
+      <div class="crane" aria-hidden="true" style="opacity:0.9;"></div>
+
+      <svg viewBox="0 0 800 600" preserveAspectRatio="xMinYMin meet" aria-hidden="true">
+        <!-- Modern-style routes: straighter paths, nod to shipping lanes but abstract -->
+        <path id="route_r1" class="route" d="M80,520 L240,420 L520,300 L700,140" data-route="r1" tabindex="0"></path>
+        <path id="route_r2" class="route" d="M40,120 L220,140 L420,200 L660,180" data-route="r2" tabindex="0"></path>
+        <path id="route_r3" class="route" d="M120,460 L300,360 L480,320 L620,440" data-route="r3" tabindex="0"></path>
+
+        <!-- small animated marker circles travel along those linear-ish routes -->
+        <circle r="6" class="marker">
+          <animateMotion dur="16s" repeatCount="indefinite" rotate="auto">
+            <mpath xlink:href="#route_r1"></mpath>
+          </animateMotion>
+        </circle>
+
+        <circle r="5.2" class="marker">
+          <animateMotion dur="18s" repeatCount="indefinite" rotate="auto">
+            <mpath xlink:href="#route_r2"></mpath>
+          </animateMotion>
+        </circle>
+
+        <circle r="5.6" class="marker">
+          <animateMotion dur="20s" repeatCount="indefinite" rotate="auto">
+            <mpath xlink:href="#route_r3"></mpath>
+          </animateMotion>
+        </circle>
+
+      </svg>
+
+      <!-- X marks as dock lights -->
+      <div class="xmark" style="left:680px; top:180px;">✕</div>
+      <div class="xmark" style="left:630px; top:430px;">✕</div>
+
+      <!-- port-clock to evoke machinery, rotates slowly -->
+      <div class="port-clock" aria-hidden="true">⟳</div>
+
+      <div class="route-label">点击任意航线以生成日志</div>
+    </div>
+
+    <div class="panel" aria-live="polite">
+      <div class="controls">
+        <label for="langToggle">语言</label>
+        <select id="langToggle">
+          <option value="both">中 / EN</option>
+          <option value="cn">仅中文</option>
+          <option value="en">仅英文</option>
+        </select>
+        <button id="downloadBtn" class="btn" title="下载当前日志">下载 txt</button>
+      </div>
+
+      <div id="logCard" class="log">点击地图上的航线开始航程……</div>
+
+      <div class="prompt">
+        <div style="font-weight:600; margin-bottom:6px;">提示词（用于图像生成）</div>
+        <pre id="imagePrompt" style="white-space:pre-wrap; margin:0; font-family:var(--mono);"></pre>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ---------- JS: fetch + interaction (compatible with your Flask backend) ---------- */
+const logCard = document.getElementById('logCard');
+const imagePrompt = document.getElementById('imagePrompt');
+const langToggle = document.getElementById('langToggle');
+const downloadBtn = document.getElementById('downloadBtn');
+const routes = document.querySelectorAll('.route');
+const label = document.querySelector('.route-label');
+
+async function fetchLog(routeId){
+  try{
+    const res = await fetch(`/generate_log?route_id=${routeId}`);
+    if(!res.ok) throw new Error('生成失败');
+    const data = await res.json();
+    renderLog(data);
+    saveRecent(data);
+  } catch(e){
+    logCard.textContent = '无法生成日志：' + e.message;
+  }
+}
+
+function renderLog(data){
+  const lang = langToggle.value;
+  let text = '';
+  if(lang === 'both' || lang === 'cn'){
+    text += `${data.route_name}\n${data.day_cn}\n位置：${data.position_cn}\n事件：${data.event_cn}\n感悟：${data.feeling_cn}\n\n`;
+  }
+  if(lang === 'both' || lang === 'en'){
+    text += `${data.route_name} — ${data.day_en}\nPosition: ${data.position_en}\nEvent: ${data.event_en}\nFeeling: ${data.feeling_en}\n`;
+  }
+  logCard.textContent = text;
+  imagePrompt.textContent = data.image_prompt_en;
+}
+
+/* accessible route interactions */
+routes.forEach(el=>{
+  el.addEventListener('click', ()=> fetchLog(el.dataset.route));
+  el.addEventListener('keydown', (e)=> { if(e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fetchLog(el.dataset.route); } });
+  el.addEventListener('mouseenter', ()=>{
+    const t = {r1:'去鲸骨岛的路', r2:'风暴眼后的秘境', r3:'无名弯的逸梦'};
+    label.textContent = t[el.dataset.route] || '航线';
+  });
+  el.addEventListener('mouseleave', ()=> label.textContent = '点击任意航线以生成日志');
+});
+
+/* download current log */
+downloadBtn.addEventListener('click', ()=>{
+  const text = logCard.textContent || "no log";
+  const blob = new Blob([text], {type:'text/plain;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const now = new Date().toISOString().slice(0,19).replace('T','_');
+  a.download = `seaday_${now}.txt`;
+  a.click();
+});
+
+/* save recent to localStorage */
+function saveRecent(data){
+  try{
+    let rec = JSON.parse(localStorage.getItem('recent_logs')||'[]');
+    rec.unshift({t:new Date().toISOString(), d:data});
+    if(rec.length>10) rec = rec.slice(0,10);
+    localStorage.setItem('recent_logs', JSON.stringify(rec));
+  }catch(e){}
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maritime Silk Road - Modern Log</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v9.2.4/ol.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;700&display=swap');
+        
+        :root {
+            --primary-color: #ffab00;
+            --dark-bg: #121212;
+            --light-bg: #1e1e1e;
+            --text-color: #e0e0e0;
+            --text-muted: #a0a0a0;
+            --border-color: #333;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            font-family: 'Noto Sans SC', sans-serif;
+            background-color: var(--dark-bg);
+            color: var(--text-color);
+            overflow: hidden;
+            display: flex;
+        }
+
+        #app-container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        #map-container {
+            flex-grow: 1;
+            position: relative;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        #sidebar {
+            width: 280px;
+            background-color: var(--light-bg);
+            padding: 15px;
+            box-shadow: -5px 0 15px rgba(0,0,0,0.2);
+            z-index: 1001;
+            display: flex;
+            flex-direction: column;
+            transition: width 0.3s ease;
+        }
+
+        .ol-zoom {
+            left: auto !important;
+            right: 8px !important;
+        }
+
+        .ol-zoom .ol-zoom-in, .ol-zoom .ol-zoom-out {
+            background-color: var(--light-bg) !important;
+            color: var(--text-color) !important;
+            border-color: var(--border-color) !important;
+        }
+
+        #log-container {
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 15px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+            margin-top: 15px;
+            transition: all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            position: relative;
+            z-index: 1000;
+        }
+
+        #log-container.fullscreen {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90vw;
+            height: 90vh;
+            z-index: 2000;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(20px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+            margin-top: 0;
+            display: flex;
+            flex-direction: column; /* 上下布局 */
+        }
+
+        /* 确保图片显示在文字上面 */
+        #log-container.fullscreen #log-image {
+            order: 1; /* 图片在第一位置 */
+        }
+
+        #log-container.fullscreen #log-content-area {
+            order: 2; /* 文字区域在第二位置 */
+        }
+
+        #log-container.fullscreen #log-image {
+            width: 100%;
+            height: 70%; /* 图片占70%高度 */
+            transition: all 0.5s ease-in-out;
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.8);
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        #log-container.fullscreen #log-content-area {
+            height: 30%; /* 文字区域占30%高度 */
+            display: flex;
+            flex-direction: column;
+            justify-content: center; /* 垂直居中 */
+            padding: 40px; /* 增加内边距 */
+            box-sizing: border-box;
+            overflow-y: auto; /* 添加垂直滚动条 */
+        }
+
+        #log-container.fullscreen #location-name {
+            margin-bottom: 20px; /* 增加标题和正文的间距 */
+        }
+
+        /* 自定义滚动条样式 */
+        #log-container.fullscreen #log-content-area::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #log-container.fullscreen #log-content-area::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        #log-container.fullscreen #log-content-area::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+        }
+
+        #log-container.fullscreen #log-content-area::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        #log-container.fullscreen #log-content {
+            max-height: 100%;
+            font-size: 16px;
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+
+        #log-container.fullscreen #location-name {
+            font-size: 24px;
+        }
+
+        @keyframes glow {
+            0% {
+                box-shadow: 0 0 10px rgba(255, 255, 255, 0.2), 0 0 5px rgba(255, 255, 255, 0.1);
+            }
+            50% {
+                box-shadow: 0 0 20px rgba(255, 255, 255, 0.6), 0 0 10px rgba(255, 255, 255, 0.4);
+            }
+            100% {
+                box-shadow: 0 0 10px rgba(255, 255, 255, 0.2), 0 0 5px rgba(255, 255, 255, 0.1);
+            }
+        }
+
+        #log-container.glow-effect {
+            animation: glow 1.5s ease-in-out;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            z-index: 1999;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: var(--text-color);
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 18px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.3s ease;
+        }
+
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        #log-container.fullscreen .close-btn {
+            display: flex;
+        }
+
+        .toggle-fullscreen-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            font-size: 20px;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1; /* 确保在 language-toggle 内 */
+            transition: all 0.3s ease;
+        }
+
+        .toggle-fullscreen-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        /* 只在引导界面显示时隐藏切换按钮 */
+        .welcome-guide:not(.hidden) ~ .log-content-area .toggle-fullscreen-btn {
+            display: none;
+        }
+        
+        /* 当显示日志内容时显示切换按钮 */
+        .log-content-area:not(.hidden) .toggle-fullscreen-btn {
+            display: flex;
+        }
+
+        /* 全屏提示样式 */
+        .fullscreen-hint {
+            background: rgba(255, 171, 0, 0.1);
+            border: 1px solid rgba(255, 171, 0, 0.3);
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin-bottom: 15px;
+            text-align: center;
+            font-size: 12px;
+            color: rgba(255, 171, 0, 0.9);
+            animation: gentle-pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes gentle-pulse {
+            0%, 100% {
+                opacity: 0.7;
+            }
+            50% {
+                opacity: 1;
+            }
+        }
+
+        /* 在全屏模式下隐藏提示 */
+        #log-container.fullscreen .fullscreen-hint {
+            display: none;
+        }
+
+
+        
+        /* 引导界面样式 */
+        .welcome-guide {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-color);
+        }
+
+        .guide-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+            animation: gentle-bounce 2s ease-in-out infinite;
+        }
+
+        @keyframes gentle-bounce {
+            0%, 100% {
+                transform: translateY(0px);
+            }
+            50% {
+                transform: translateY(-5px);
+            }
+        }
+
+        .guide-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: var(--primary-color);
+        }
+
+        .guide-description {
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 30px;
+            opacity: 0.8;
+            max-width: 280px;
+        }
+
+        .guide-features {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            width: 100%;
+            max-width: 250px;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .feature-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateX(5px);
+        }
+
+        .feature-icon {
+            font-size: 18px;
+            opacity: 0.8;
+        }
+
+        .feature-item span:last-child {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        #log-image {
+            width: 100%;
+            height: 150px;
+            border-radius: 12px;
+            background-color: var(--dark-bg);
+            background-size: cover;
+            background-position: center;
+            margin-bottom: 12px;
+            position: relative;
+        }
+
+        #log-image .loader {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border: 4px solid var(--border-color);
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
+        #log-content {
+            font-size: 14px;
+            line-height: 1.6;
+            max-height: 120px;
+            overflow-y: auto;
+            color: var(--text-muted);
+        }
+        
+        #log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        #location-name {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+
+        #language-toggle {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 20px;
+            padding: 5px;
+            display: flex;
+            margin-bottom: 20px;
+            position: relative; /* 添加相对定位 */
+        }
+
+        #language-toggle button {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            padding: 8px 15px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        #language-toggle button.active {
+            background: var(--primary-color);
+            color: var(--dark-bg);
+            border-radius: 15px;
+        }
+
+        #menu-toggle {
+            display: none; /* Hidden on desktop */
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1002;
+            background: var(--light-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 10px;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        @media (max-width: 768px) {
+            #sidebar {
+                position: absolute;
+                left: -350px;
+                height: 100%;
+                transition: left 0.3s ease;
+            }
+            #sidebar.open {
+                left: 0;
+            }
+            #menu-toggle {
+                display: block;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="app-container">
+        <div class="modal-overlay" id="modal-overlay"></div>
+
+        <div id="map-container">
+            <div id="map"></div>
+            <button id="menu-toggle">☰</button>
+        </div>
+        <div id="sidebar">
+            <div id="language-toggle">
+                <button id="lang-zh">中</button>
+                <button id="lang-en" class="active">EN</button>
+                <button class="toggle-fullscreen-btn" id="toggle-fullscreen-btn">⛶</button>
+            </div>
+            <div id="log-container">
+                <button class="close-btn" id="close-btn">×</button>
+                
+                <!-- 默认引导界面 -->
+                <div id="welcome-guide" class="welcome-guide">
+                    <div class="guide-icon">🗺️</div>
+                    <h3 class="guide-title">探索航海路线</h3>
+                    <p class="guide-description">点击地图上的任意节点，查看详细的航海日志和文化介绍</p>
+                    <div class="guide-features">
+                        <div class="feature-item">
+                            <span class="feature-icon">📍</span>
+                            <span>点击节点查看详情</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">🔍</span>
+                            <span>全屏模式深度阅读</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">🌐</span>
+                            <span>中英文双语切换</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 日志内容区域 -->
+                <div id="log-content-area" style="display: none;">
+                    <div class="fullscreen-hint">
+                        <span>💡 点击右上角 ⛶ 按钮进入全屏模式</span>
+                    </div>
+                    <div id="log-header">
+                        <span id="location-name"></span>
+                    </div>
+                    <div id="log-content"></div>
+                </div>
+                
+                <!-- 图片区域 -->
+                <div id="log-image">
+                    <div class="loader" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/ol@v9.2.4/dist/ol.js"></script>
+    <script>
+        let currentLanguage = 'en';
+        
+        // 双语文本配置
+        const translations = {
+            zh: {
+                guideTitle: '探索航海路线',
+                guideDescription: '点击地图上的任意节点，查看详细的航海日志和文化介绍',
+                featureClick: '点击节点查看详情',
+                featureFullscreen: '全屏模式深度阅读',
+                featureLanguage: '中英文双语切换',
+                fullscreenHint: '💡 点击右上角 ⛶ 按钮进入全屏模式',
+                loading: '加载中...',
+                error: '错误',
+                errorMessage: '加载日志条目失败。'
+            },
+            en: {
+                guideTitle: 'Explore Maritime Routes',
+                guideDescription: 'Click on any node on the map to view detailed maritime logs and cultural introductions',
+                featureClick: 'Click nodes for details',
+                featureFullscreen: 'Fullscreen mode for deep reading',
+                featureLanguage: 'Chinese-English bilingual switch',
+                fullscreenHint: '💡 Click the ⛶ button in the top right corner to enter fullscreen mode',
+                loading: 'Loading...',
+                error: 'Error',
+                errorMessage: 'Failed to load log entry.'
+            }
+        };
+        
+        // 更新界面语言的函数
+        function updateInterfaceLanguage() {
+            const t = translations[currentLanguage];
+            
+            // 更新引导界面
+            document.querySelector('.guide-title').textContent = t.guideTitle;
+            document.querySelector('.guide-description').textContent = t.guideDescription;
+            
+            // 更新功能特性列表
+            const featureItems = document.querySelectorAll('.feature-item span:last-child');
+            featureItems[0].textContent = t.featureClick;
+            featureItems[1].textContent = t.featureFullscreen;
+            featureItems[2].textContent = t.featureLanguage;
+            
+            // 更新全屏提示
+            document.querySelector('.fullscreen-hint span').textContent = t.fullscreenHint;
+        }
+        const map = new ol.Map({
+            target: 'map',
+            controls: [
+                new ol.control.Attribution({
+                    collapsible: false
+                }),
+                new ol.control.Rotate(),
+                new ol.control.Zoom()
+            ],
+            layers: [
+                new ol.layer.Tile({
+                    source: new ol.source.XYZ({
+                        url: 'https://{a-d}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+                        attributions: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
+                    })
+                })
+            ],
+            view: new ol.View({
+                center: ol.proj.fromLonLat([105, 5]),
+                zoom: 3
+            })
+        });
+
+        const langToggle = document.getElementById('language-toggle');
+        const logContainer = document.getElementById('log-container');
+        const logImage = document.getElementById('log-image');
+        const imageLoader = logImage.querySelector('.loader');
+        const locationName = document.getElementById('location-name');
+        const logContent = document.getElementById('log-content');
+        const menuToggle = document.getElementById('menu-toggle');
+        const sidebar = document.getElementById('sidebar');
+        const modalOverlay = document.getElementById('modal-overlay');
+        const closeBtn = document.getElementById('close-btn');
+        const toggleFullscreenBtn = document.getElementById('toggle-fullscreen-btn');
+
+        // 存储当前日志数据
+        let currentLogData = null;
+
+        // 全屏模式控制
+        function toggleFullscreen() {
+            logContainer.classList.toggle('fullscreen');
+            modalOverlay.classList.toggle('active');
+            
+            // 根据全屏状态更新日志内容
+            updateLogContent();
+        }
+
+        // 关闭全屏模式
+        function closeFullscreen() {
+            logContainer.classList.remove('fullscreen');
+            modalOverlay.classList.remove('active');
+            
+            // 更新日志内容为简短版
+            updateLogContent();
+        }
+
+        // 更新日志内容显示
+        function updateLogContent() {
+            if (!currentLogData) return;
+            
+            const isFullscreen = logContainer.classList.contains('fullscreen');
+            if (isFullscreen) {
+                // 全屏模式显示详细版
+                logContent.textContent = currentLogData.detailed_content || currentLogData.content;
+            } else {
+                // 缩小模式显示简短版
+                logContent.textContent = currentLogData.short_content || currentLogData.content;
+            }
+        }
+
+        // 事件监听器
+        closeBtn.addEventListener('click', closeFullscreen);
+        modalOverlay.addEventListener('click', closeFullscreen);
+        toggleFullscreenBtn.addEventListener('click', toggleFullscreen);
+        
+        // ESC键关闭全屏
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && logContainer.classList.contains('fullscreen')) {
+                closeFullscreen();
+            }
+        });
+
+        langToggle.addEventListener('click', (e) => {
+            if (e.target.tagName === 'BUTTON') {
+                currentLanguage = e.target.id.split('-')[1];
+                document.querySelector('#language-toggle button.active').classList.remove('active');
+                e.target.classList.add('active');
+                
+                // 更新界面语言
+                updateInterfaceLanguage();
+            }
+        });
+
+        menuToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('open');
+        });
+
+        fetch('/routes')
+            .then(response => response.json())
+            .then(data => {
+                const route = data; // Use the returned data object directly
+                
+                // Create route coordinates from waypoints
+                const routeCoords = route.waypoints.map(waypoint => ol.proj.fromLonLat(waypoint.coord));
+
+                // Create a smooth curved line using advanced spline interpolation
+                const smoothRouteCoords = [];
+                
+                // First, create the basic route following the waypoints order
+                for (let i = 0; i < routeCoords.length; i++) {
+                    smoothRouteCoords.push(routeCoords[i]);
+                    
+                    if (i < routeCoords.length - 1) {
+                        const current = routeCoords[i];
+                        const next = routeCoords[i + 1];
+                        
+                        // Calculate distance between points
+                        const dx = next[0] - current[0];
+                        const dy = next[1] - current[1];
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        // Add multiple intermediate points for smoother curves
+                        const numIntermediatePoints = Math.max(3, Math.floor(distance / 500000));
+                        
+                        for (let j = 1; j <= numIntermediatePoints; j++) {
+                            const t = j / (numIntermediatePoints + 1);
+                            
+                            // Quadratic Bezier curve with control point offset
+                            const controlOffsetX = (Math.random() - 0.5) * distance * 0.3;
+                            const controlOffsetY = (Math.random() - 0.5) * distance * 0.2;
+                            
+                            const controlX = (current[0] + next[0]) / 2 + controlOffsetX;
+                            const controlY = (current[1] + next[1]) / 2 + controlOffsetY;
+                            
+                            // Quadratic Bezier formula: B(t) = (1-t)²P₀ + 2(1-t)tP₁ + t²P₂
+                            const x = Math.pow(1 - t, 2) * current[0] + 
+                                     2 * (1 - t) * t * controlX + 
+                                     Math.pow(t, 2) * next[0];
+                            const y = Math.pow(1 - t, 2) * current[1] + 
+                                     2 * (1 - t) * t * controlY + 
+                                     Math.pow(t, 2) * next[1];
+                            
+                            smoothRouteCoords.push([x, y]);
+                        }
+                    }
+                }
+
+                const routeFeature = new ol.Feature({
+                    geometry: new ol.geom.LineString(smoothRouteCoords)
+                });
+
+                const routeStyle = new ol.style.Style({
+                    stroke: new ol.style.Stroke({
+                        color: 'rgba(255, 171, 0, 0.8)',
+                        width: 3,
+                        lineDash: [10, 5]  // 虚线样式
+                    })
+                });
+
+                const routeLayer = new ol.layer.Vector({
+                    source: new ol.source.Vector({
+                        features: [routeFeature]
+                    }),
+                    style: routeStyle
+                });
+                map.addLayer(routeLayer);
+
+                const waypointFeatures = route.waypoints.map((waypoint, index) => {
+                    const feature = new ol.Feature({
+                        geometry: new ol.geom.Point(ol.proj.fromLonLat(waypoint.coord)),
+                        waypointIndex: index,
+                        is_strategic: waypoint.is_strategic,
+                        waypoint_data: waypoint
+                    });
+                    return feature;
+                });
+
+                const regularWaypointStyle = new ol.style.Style({
+                    image: new ol.style.Circle({
+                        radius: 8,
+                        fill: new ol.style.Fill({ color: '#ffab00' }),
+                        stroke: new ol.style.Stroke({ color: '#fff', width: 2 })
+                    })
+                });
+
+                const strategicWaypointStyle = new ol.style.Style({
+                    image: new ol.style.Circle({
+                        radius: 8,
+                        fill: new ol.style.Fill({ color: '#ffab00' }),
+                        stroke: new ol.style.Stroke({ color: '#fff', width: 2 })
+                    })
+                });
+
+                const waypointLayer = new ol.layer.Vector({
+                    source: new ol.source.Vector({
+                        features: waypointFeatures
+                    }),
+                    style: function(feature) {
+                        return feature.get('is_strategic') ? strategicWaypointStyle : regularWaypointStyle;
+                    }
+                });
+                map.addLayer(waypointLayer);
+
+                // Create tooltip element
+                const tooltip = document.createElement('div');
+                tooltip.className = 'tooltip';
+                tooltip.style.cssText = `
+                    position: absolute;
+                    background: rgba(0, 0, 0, 0.8);
+                    color: white;
+                    padding: 8px 12px;
+                    border-radius: 4px;
+                    font-size: 12px;
+                    pointer-events: none;
+                    z-index: 1000;
+                    display: none;
+                    max-width: 200px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                `;
+                document.body.appendChild(tooltip);
+
+                map.on('click', function (evt) {
+                    const feature = map.forEachFeatureAtPixel(evt.pixel,
+                        function (feature) { return feature; },
+                        { hitTolerance: 10 }
+                    );
+                    if (feature && feature.get('waypointIndex') !== undefined) {
+                        const waypointIndex = feature.get('waypointIndex');
+                        generateLog(waypointIndex);
+                        
+                        // 改进的自动居中效果
+                        const coordinates = feature.getGeometry().getCoordinates();
+                        map.getView().animate({
+                            center: coordinates,
+                            zoom: Math.max(map.getView().getZoom(), 6), // 确保最小缩放级别
+                            duration: 1200,
+                            easing: function(t) {
+                                return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; // easeInOutQuad
+                            }
+                        });
+                    }
+                });
+
+                map.on('pointermove', function (e) {
+                    if (e.dragging) {
+                        tooltip.style.display = 'none';
+                        return;
+                    }
+                    const pixel = map.getEventPixel(e.originalEvent);
+                    const feature = map.forEachFeatureAtPixel(pixel, function (feature) {
+                        return feature;
+                    }, { hitTolerance: 10 });
+                    
+                    if (feature && feature.get('waypoint_data')) {
+                        const waypoint = feature.get('waypoint_data');
+                        const cityName = currentLanguage === 'zh' ? waypoint.name_zh : waypoint.name_en;
+                        const countryName = currentLanguage === 'zh' ? waypoint.country_zh : waypoint.country_en;
+                        
+                        tooltip.innerHTML = `<strong>${cityName}</strong><br>${countryName}`;
+                        tooltip.style.display = 'block';
+                        tooltip.style.left = (e.originalEvent.pageX + 10) + 'px';
+                        tooltip.style.top = (e.originalEvent.pageY - 10) + 'px';
+                        map.getTargetElement().style.cursor = 'pointer';
+                    } else {
+                        tooltip.style.display = 'none';
+                        map.getTargetElement().style.cursor = '';
+                    }
+                });
+
+                // Hide tooltip when mouse leaves map
+                map.getTargetElement().addEventListener('mouseleave', function() {
+                    tooltip.style.display = 'none';
+                });
+            });
+
+        function generateLog(waypointIndex) {
+            const t = translations[currentLanguage];
+            
+            logContainer.classList.add('visible');
+            
+            // 隐藏引导界面，显示日志内容区域
+            const welcomeGuide = document.getElementById('welcome-guide');
+            const logContentArea = document.getElementById('log-content-area');
+            welcomeGuide.style.display = 'none';
+            logContentArea.style.display = 'block';
+            
+            logImage.style.backgroundImage = 'none';
+            imageLoader.style.display = 'block';
+            locationName.textContent = t.loading;
+            logContent.textContent = '';
+
+            fetch(`/generate_log?waypoint_index=${waypointIndex}&language=${currentLanguage}`)
+                .then(response => response.json())
+                .then(data => {
+                    // 存储日志数据
+                    currentLogData = data;
+                    
+                    imageLoader.style.display = 'none';
+                    locationName.textContent = data.location;
+                    
+                    // 根据当前模式显示相应内容
+                    updateLogContent();
+                    
+                    if (data.image_url) {
+                        const img = new Image();
+                        img.src = data.image_url;
+                        img.onload = () => {
+                            logImage.style.backgroundImage = `url(${data.image_url})`;
+
+                            // 触发Glow效果并自动放大
+                            logContainer.classList.add('glow-effect');
+                            toggleFullscreen(); // 自动进入全屏
+                            setTimeout(() => {
+                                logContainer.classList.remove('glow-effect');
+                            }, 1500); // 动画持续时间
+                        };
+                    }
+                })
+                .catch(error => {
+                    console.error('Error generating log:', error);
+                    imageLoader.style.display = 'none';
+                    locationName.textContent = t.error;
+                    logContent.textContent = t.errorMessage;
+                });
+        }
+        
+        // 页面加载完成后初始化界面语言
+        updateInterfaceLanguage();
+    </script>
+</body>
+</html>
